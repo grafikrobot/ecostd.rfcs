@@ -31,8 +31,6 @@ to adhere to what users ask them to do. And do it in a way that is future proof.
 [#motivation]
 == Motivation
 
-Why is this needed? What problem does it solve? Who does this help?
-
 It is currently not possible for a build system to ask a compiler what
 language, versions of the language, features of languages, it supports because
 any one compiler is different in what it does and how one can find out what it
