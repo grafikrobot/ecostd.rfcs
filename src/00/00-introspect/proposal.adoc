@@ -1,0 +1,881 @@
+[#introspection]
+= Tool Introspection
+:rfcpr: 0
+:stdpr: 0
+:authors: René Ferdinand Rivera Morell
+:email: grafikrobot@gmail.com
+:copyright: Copyright {authors}
+:license: Creative Commons Attribution 4.0 International License (CC BY 4.0)
+:nofooter:
+:reproducible:
+:revdate: {docdate}
+:sectanchors:
+:sectnumlevels: 10
+:sectnums:
+:source-highlighter: rouge
+:toc-title: Contents
+:toc:
+:toclevels: 5
+:version-label!:
+
+
+* *RFC PR*: https://github.com/ecostd/rfcs/pull/{rfcpr}[ecostd/rfcs/{rfcpr}]
+// * *Standard PR*: https://github.com/ecostd/standard/pull/{stdpr}[ecostd/standard/{stdpr}]
+
+[#abstract]
+== Abstract
+
+This presents a way for tools to both describe what they can do, and for tools
+to adhere to what users ask them to do. And do it in a way that is future proof.
+
+[#motivation]
+== Motivation
+
+Why is this needed? What problem does it solve? Who does this help?
+
+It is currently not possible for a build system to ask a compiler what
+language, versions of the language, features of languages, it supports because
+any one compiler is different in what it does and how one can find out what it
+does. Now extend that to all programming tools and environments. This proposal
+aims to solve that problem by specifying a common protocol for tools to
+communicate what they can do.
+
+[#scope]
+== Scope
+
+This proposal aims to specify a method for tools to communicate the
+functionality they support consistently in an interoperable manner. The goal is
+to make it possible to write tools that adapt to present and future tools
+without changes. Ultimately it wants to make it possible to address two cases:
+
+* What does the tool support and adhere to?
+* The tool should adhere to what the consumer asks if possible.
+
+[#design]
+== Design
+
+There are two aspects that this proposal covers:
+
+Introspection:: A tool reporting its capabilities to a consumer.
+
+Declaration:: A consumer specifying the capability edition and version.
+
+_Introspection_ would allow a consumer to ask the target tool what versions of
+of capabilities it supports. The target tool would respond with the range of
+capabilities, or nothing, that it supports. With that information the consumer
+can go ahead and follow the defined standard to further interaction with the
+target tool.
+
+For _declaration_ a consumer can specify a particular capability and a version
+to interact with. And if the target tool recognizes the specification it can
+continue to process the consumer's use of that capability.
+
+Even though these are two separate functions they are by necessity tied to each
+other. In order for this pairing to work, and generally for tool
+interoperability to work, the tool consumers and target tools must operate on
+this minimal pair of functions to bootstrap their interactions. To make that
+possible, this design follows some basic tenets:
+
+[horizontal]
+
+Minimal:: The interface of the target tool is a single universal command line
+argument for each of the two operations.
+
+Concise:: The information communicated to and from the target tool and consumer
+is as brief as needed to convey the required information.
+
+Robust:: The interface and information should not result in failure conditions
+for either the consumer or target tool. Both ends of the interactions need to
+rely on the stability of the interface to then be able to interoperate.
+
+=== Introspection
+
+The consumer can use a single method to query the target tool and obtain all the
+capabilities that are available or specifically requested. The use case
+supported is for unbounded _introspection_ of the available capabilities with a
+single valueless `--std-info` option.
+
+And unbounded introspection simply returns everything the tool is capable
+of doing. The tool has the option to respond with either all minimal single
+(aka bare) versions or full version ranges. Either can be trivially implemented
+by tools as most time it can be a hard-wired response text.
+
+Running a tool with the option would look like the following:
+
+[source,shell]
+----
+$ tool --std-info
+----
+
+And could produce this as a minimal JSON output to indicate the single version
+of the capabilities it supports:
+
+[source,json]
+----
+include::example-01.json[]
+----
+
+Or could produce this as a JSON output in the case of full version ranges:
+
+[source,json]
+----
+include::example-02.json[]
+----
+
+Which would minimally indicate that the tool only supports the introspection
+capability at versions "1.0.0" through "2.5.0".
+
+Per the findings of the <<User Interface>> research and the consensus of the
+<<SG15: P2717R2 (2023-06-16)>> polling a tool can, additionally, provide the
+introspection information in a file accompanying the tool. There is a challenge
+when providing such an introspection file though: It is not practical to specify
+an absolute location, or locations, across the variety of operating systems and
+tools in the programming ecosystem. As such we provide some possibilities:
+
+1. The name of an introspection file will be the name of the top level invoked
+tool executable (or script, or equivalent) with any type extension
+(i.e. "`.exe`") removed if it exists. That base name will be appended with the
+`.stdinfo` text. For example: `cl.exe` => `cl.stdinfo`, or
+`pass:[g++]` => `pass:[g++].stdinfo`.
+
+2. The introspection file can be found: in the same filesystem location
+as the tool executable (or script, or equivalent), in an implementation defined
+location relative to the tool location, or in an implementation defined global
+location (i.e. an absolute path location).
+
+=== Declaration
+
+The consumer can inform, i.e. declare, to the target tool that specific
+capabilities should use particular versions when responding with information
+using one or more `--std-info=<VersionSpec>` options. The declarations can only
+exist in tandem with options for the mentioned capabilities. It's expected that
+a consumer will first _introspect_ a target tool to discover what it supports.
+Followed by the consumer _declaring_ to the target tool what version(s) of the
+capabilities it is willing to consume. The target tool can then either accept
+the declared capability versions or indicate an error.
+
+An exchange between a consumer and target tool would begin with the
+_introspection_:
+
+[source,shell]
+----
+tool "--std-info"
+----
+
+With a target tool response:
+
+[source,json]
+----
+include::example-03.json[]
+----
+
+Which the consumer can use to _declare_ the specific capability versions:
+
+[source,shell]
+----
+tool "--std-decl=std_info=2.0.0" "--std-decl=gcc_extra=2.1.0" ...
+----
+
+=== Levels
+
+For some use cases it helps to simplify the extent of information the
+introspection understands. While it would be reasonable to expect a tool written
+in a modern general purpose programming language to fully implement all aspects
+of the introspection. It would not be practical to have a shell script parse
+and recognize the more challenging aspect of parsing version number ranges and
+matching them together. To support such use cases the introspection has to
+support levels "min" and "full".
+
+Obviously the "full" level equates to the tool understanding all the arguments
+and values. The "min" level only understands these:
+
+* Only introspection `--std-info` option.
+* Single version number in the responses for `--std-info`.
+
+This has the effect that a tool which only support the "min" level can only
+support specific versions of the capabilities it implements. But it also means
+that consumers will need to adjust their behavior to the tool instead of being
+able to ask the tool to adjust to the consumer. Consequently the consumer will
+likely have the more complex logic to do that adjustment.
+
+=== Capabilities
+
+For this proposal capabilities refers to any published coherent target tool
+interface. This can include any single interface, like a single target tool
+option. Or it can include a collective interface of the target tool that covers
+many options. A capability is specified as a series of "scoped" identifiers
+separated by underscore ("_"). The capability must match this regular expression:
+footnote:Regex[ECMAScript® 2022 language specification, 13th edition, June 2022 (https://www.ecma-international.org/publications-and-standards/standards/ecma-262/)]
+
+[source,plan_text]
+----
+^[a-z0-9]+(_[a-z0-9]+)+$
+----
+
+At minimum a capability has two components. The first component is a general
+scope that identifies if the capability is one in the standard, or if it's a
+tool vendor capability.
+
+Standard:: A capability with a scope of `std` indicates that it's defined in the
+EcoStd. footnote:EcoStd[Ecosystem Standards (https://ecostd.github.io/)]
+
+Vendor:: Any other capability, i.e. other than `std`, is available for vendors
+to use as extensions outside the EcoStd. footnote:EcoStd[]
+
+There was a question on "Why not alow 0-9 in the name?". Considering this brings
+up the question as to the utility of having numbers in the name. An
+obvious use case is to add versioning to the name, for example `std2`. That is a
+case we want to avoid. As it avoids using the version numbers themselves which
+subverts the spirit of the introspection. Another use case is to cover vendor
+specific names for tools that use a number in their names, for example `b2`,
+`build2`. Because that is a currently existing use case, and that forcing such
+applications that want custom capabilities to create alternate names has
+various drawbacks, yes, we should accept numbers in the names.
+
+=== Version Specification
+
+When indicating the version, or versions, to the target tool or the consumer the
+version information is specified in two possible forms: a single version, or a
+single version range.
+
+==== Semantic Versioning
+
+We use the base (pre-release and build labels are not allowed) specification of
+Semantic Versioning 2.0.0
+footnote:SemVer[Semantic Versioning 2.0.0 (https://semver.org/spec/v2.0.0.html)]
+to define the syntax and semantics of compatibility.
+
+--
+We define a tool (producer or consumer) to be _backward compatible_, for
+semantic versioning, with another tool (consumer or producer) when the
+consumer that implements an older version of the API can operate, with the same
+semantics, when interacting with a producer that implements a newer version of
+the API, and vice versa.
+
+For example: If a producer generates JSON structured data. In a newer,
+compatible, version if may decided to introduce a new field. If such a field
+can be ignored by the consumer such that ignoring it does not change the
+operational semantics of the consumer the API would be considered
+_backward compatible_. And hence could be indicated with a MINOR or PATCH
+version difference per semantic versioning.
+
+The specifics of how the API behaves to achieve _backward compatible_ changes
+is up to the individual specification of the capabilities. As the ability to be
+_backward compatible_ varies with the specifics of many factors, like tool
+options, data formats, and so on.
+--
+
+==== Single Version
+
+A single version in this proposal is composed of a one to three dotted whole
+numbers. The numbers are expected to be strictly increasing.
+Following SemVer footnote:SemVer[] a change to the MAJOR version indicates a
+backward incompatible change. And changes to the MINOR and PATCH versions
+indicate backward compatible changes.
+The format for the version must match the regular expression: footnote:Regex[]
+
+[source,plain_text]
+----
+^[0-9]+([.][0-9]+){0,2}$
+----
+
+==== Version Range
+
+A version range in this proposal indicates a lower and upper bound of versions.
+It is composed of a pair of versions, separated by a comma, and bracketed by
+either an inclusive or exclusive symbol. This matches the intuition of a
+mathematic interval, but with the use of the version triplet number line.
+footnote:[Wikipedia: Interval (mathematics) (https://en.wikipedia.org/wiki/Interval_(mathematics))]
+Like the interval notation the `()` brackets indicate an exclusive point. And
+the `[]` brackets indicate an inclusive point. As versions are decidedly not
+single integers we use a `,` (comma) to separate the start and end of the range
+instead of using `..`. Hence the format for the version range must match the
+regular expression:
+footnote:Regex[]
+
+[source,plain_text]
+----
+^[[(][0-9]+([.][0-9]+){0,2},[0-9]+([.][0-9]+){0,2}[)\\]]$
+----
+
+==== Multiple Ranges
+
+There are situations where specifying only one version range for what the
+application supports is not sufficient. For example an application may decide
+that they add support for a `2.0.0` version but not support further `1.x.y`
+versions. In that case it's important to be precise in informing consumers of
+this fact. To allow for that situation one can specify a JSON array instead of
+the single JSON string for the version range. For example:
+
+[source,plain_text]
+----
+include::example-07.json[]
+----
+
+=== Version Matching
+
+When given two version specifications tools will need to match the two to
+determine the sub-range that are compatible with both. There are two aspects to
+doing that matching: comparing the two single versions, and evaluating the
+sub-range interval.
+
+==== Single Version Comparison
+
+Comparing two single versions equates to three-way comparing each of the
+components of both, `a` and `b`, as:
+
+. If the whole numbers of the first components, `i` and `j`, are not equal the
+comparison is either `a < b` or `a > b` if `i < j` or `i > j` respectively.
+Otherwise,
+. If the whole numbers of the second components, `k` and `l`, are not equal the
+comparison is either `a < b` or `a > b` if `k < l` or `k > l` respectively.
+Otherwise,
+. If the whole numbers of the third components, `m` and `n`, are not equal the
+comparison is either `a < b` or `a > b` if `m < n` or `m > n` respectively.
+Otherwise,
+. The versions are equal, i.e. `a == b`.
+
+==== Range Comparison
+
+Tools will need to compare either a single version to a version range, or a
+version range to another range to determine the overlapping version sub-range.
+The single version to a version range comparison can be reformulated to a
+range-to-range comparison. I.e. a comparison of a single range `a` to a range
+`b` is equivalent to a comparison of range `[a,a]` to range `b`. Hence we only
+need to consider the range-to-range comparison. Although implementations may
+use special case for comparing single-to-range and range-to-single.
+Range-to-range should follow something like the following to compare a range
+`a,b` to `m,n`, with some varied inclusive or exclusive ends:
+
+. If `b < m` or `n < a` the range is _empty_.
+. Otherwise, assign a _partial_ range `x,y = max(a,m), min(b,n)`.
+. If `a` or `m` are inclusive, then:
+.. If `b` or `n` are inclusive, then the range is `[x,y]`.
+.. Otherwise, the range is `[x,y)`.
+. Otherwise, if `b` or `n` are inclusive, then the range is `(x,y]`.
+. Otherwise, the range is `(x,y)`.
+
+=== Format
+
+The information reported by _introspection_ is a JSON
+footnote:json[ISO/IEC 21778:2017 Information technology — The JSON data interchange syntax, (https://www.iso.org/standard/71616.html)]
+format document. Some advantages to using JSON:
+
+* It is widely used and available either natively or through libraries in many
+programming languages. Which is particularly important as tools are written in
+an array of differing programming languages.
+* It is a simple format to understand by both programs and humans.
+
+In maintaining our goals of the interface being minimal, concise, and robust,
+the format for communicating the capabilities is a single key/value collection,
+i.e. a JSON object.
+footnote:json[]
+
+Capability Identifier:: The _key_ is a string with the capability identifier. The
+format of the is as described in the <<Capabilities>> section.
+
+Version Specification:: The _value_ indicates the versions supported by the tool
+for the capability. The versions follows the format described in the
+<<Version Specification>> section.
+
+In addition to the _capability identifier_ / _version specification_ members,
+there are additional special members:
+
+Schema:: The document can also specify a reference to a JSON Schema.
+footnote:jschema[JSON Schema: A Media Type for Describing JSON Documents (http://json-schema.org/latest/json-schema-core.html)]
+For this the _key_ would be `$schema`, and the _value_ would a URI to a
+published stable schema
+(`std_info-1.0.0.json`).
+
+There is one designated capability that is required to appear in the document:
+The `std_info` capability with a corresponding _version specification_. This
+requirement allows a consumer to identify the format of the rest of the document
+at all times.
+
+This is a minimal conforming document:
+
+[source,json]
+----
+include::example-04.json[]
+----
+
+This is also a minimal conforming document. But specifies a range of versions
+supported for the `std_info` capability:
+
+[source,json]
+----
+include::example-05.json[]
+----
+
+This example adds a custom vendor capability and the schema reference:
+
+[source,json]
+----
+include::example-06.json[]
+----
+
+=== Capability Versions
+
+The capabilities and their version is expected to work similar to how {CPP}
+feature macro version ([version.syn]) in that it specifies if a feature of a
+standard is implemented and at what version. Although the meaning of the
+capability version is not defined, it's recommended that it follow some simple
+rules:
+
+* The _major-number_ should only change for large changes.
+* The _minor-number_ should only change for fixes that are significant, but not
+  large.
+* The _patch-number_ should only change for fixes that are simple and small.
+
+That is, it follows the industry understanding of sematic versioning.
+footnote:SemVer[]
+
+* Each part of the version number should always increment, but;
+* The _minor-number_ should reset to zero when the _major-number_ increases,
+  equivalently for the _patch-number_ and _minor-number_.
+
+These rules set it apart from the {CPP} feature macros that they impart some
+meaning to a version relative to other versions.
+
+=== User Interface
+
+This proposal currently suggests to add some application command line (CLI)
+options as the user interface for obtaining the introspection information. In
+particular adding `--std-info=X` and `--std-info-out=X` options for any
+conforming tool. Some compiler vendors expressed some concerns regarding this
+choice:
+
+* Launching the application to get this information can be expensive,
+  particularly in "performance sensitive scenarios".
+* It increases the binary size of applications. Which can impact deployment
+  time in some environments, like continuous integration.
+
+One alternative to adding command line options, in this case, and as suggested,
+is to have an external fixed file with the content. This alternative hinges on
+being able to find that file through some reasonably stable method.
+
+We explore the pros and cons of both choices herein. Note, as this feature has
+not yet been implemented the analysis below is an informed best guess.
+
+First some assumptions:
+
+. We are only going to consider the logic for adding the minimal conforming
+  interface and introspection information result. I.e. _minimum level_
+  (<<intspct-min>>) functionality.
+. We will make some best effort prospective optimizations to an expected
+  implementation. I.e. try to think of minimal code and data that reuses
+  existing functionality in an application.
+
+It is important to understand in these implementation considerations that tools
+can be both an _application_ and _consumer_ in this. Where an _application_
+is a tool producing the introspection information. And a _consumer_ ingests
+that information. But either can be a compiler driver, linker, assembler,
+analyzer, build system, package manager, IDE, and so on. For example a package
+manager will invoke a build system for introspection. But also a build system
+will invoke a package manager for introspection.
+
+==== Command Line Options
+
+Adding command line options to an application is a well know practice that has
+a long history. As such it's relatively easy to estimate it's impact.
+
+_(A) Application: Sizeof of introspection string in the application "binary"._
+
+The absolute _minimum level_ conforming introspection string in this would be
+`{"std_info":"1"}`. But that's not particularly useful as we would expect
+some other items represented. Being generous we can make a guess of having 10
+items:
+`{"std_info":"1","std_first":"1","std_second":"1","std_third":"1","std_fourth":"1","std_fifth":"1","std_sixth":"1","std_seventh":"1","std_eighth":"1","std_ninth":"1"}`.
+Which gives a total of 165 UTF-8 code points, or the same byte count, plus a
+null terminator. We can round that up to 200 bytes total.
+
+_(B) Application: Additional code to handle the options._
+
+This cost is harder to estimate as the collection of application implementations
+is varied in both method and programming languages. For this we can roughly
+estimate an implementation difficulty for some of the most used tools in the
+{CPP} ecosystem. Below is a survey of the difficulty of adding various command
+line option syntax in three categories, compiler drivers, build systems, and
+package managers:
+
+[cols="1,1,1,1,1,1",options="header"]
+|===
+^|Tool
+^|Current
+^|`*--opt=val*`
+^|`*-opt=val*`
+^|`*--opt:val*`
+^|`*-opt:val*`
+
+6+^h|Compiler Driver
+
+|`cl.exe` (Windows, macOS)
+l|
+/opt:val
+-opt:val
+3+^.^|_unknown_^1^
+^.^|&check;
+
+|`clang` (many)
+l|
+-opt val
+-opt=val
+--opt=val
+^.^|&check;
+^.^|&check;
+2+^.^|Easy; use Joined<["--"], "foo:"> in `clang&#x200B;/&#x200B;include&#x200B;/&#x200B;clang&#x200B;/&#x200B;Driver&#x200B;/&#x200B;Options.td`.&nbsp;^2^
+
+|`gcc` (many)
+l|
+-opt val
+-opt=val
+--opt=val
+^.^|&check;
+^.^|&check;
+2+^.^|Trivial; just use `:` instead of `=` to spell the option in `*.opt`.&nbsp;^3^
+
+6+^h|Build System
+
+|Cmake (many)
+l|
+-opt val
+-opt=val
+--opt val
+--opt=val
+^.^|&check;
+^.^|&check;
+2+^.^|Easy; Add test for ':' in https://github.com/Kitware/CMake/blob/master/Source/cmCommandLineArgument.h#L102[`cm&#x200B;Command&#x200B;Line&#x200B;Argument.h`].&nbsp;^4^
+
+|MSBuild (many)
+l|
+/opt:val
+-opt:val
+3+^.^|_unknown_^1^
+^.^|&check;
+
+|Ninja (many)
+l|
+-opt val
+--opt=val
+^.^|&check;
+3+^.^|Very Hard; requires changing `getopt_long`.&nbsp;^5^
+
+|QMake (many)
+l|
+-opt val
+4+^.^|Medium; https://github.com/qt/qtbase/blob/55aee8697512af105dfefabc1e2ec41d4df1e45e/qmake/option.cpp#L173[it's custom {CPP}] ^6^
+
+|GNU Make (many)
+l|
+-opt val
+--opt=val
+^.^|&check;
+3+^.^|Very Hard; requires changing `getopt_long`.&nbsp;^5^
+
+|autotools (Unix-like)
+l|
+-opt val
+4+^.^|Very Hard
+
+|Gradle (Java)
+l|
+-opt val
+-opt=val
+--opt val
+--opt=val
+^.^|&check;
+^.^|&check;
+2+^.^|Easy; it's a single custom parser: https://github.com/gradle/gradle/blob/master/subprojects/cli/src/main/java/org/gradle/cli/CommandLineParser.java[CommandLineParser.java] ^7^
+
+|Bazel (Unix, macOS, Windows)
+l|
+--opt=val
+--opt val
+-opt val
+^.^|&check;
+3+^.^|Very Hard; Mostly Starlark code.
+
+|nmake (Windows)
+l|
+/opt val
+-opt val
+4+^.^|Easy; it's a simple C arg parser.
+
+|Meson (Python)
+l|
+-opt=val
+--opt=val
+--opt val
+^.^|&check;
+^.^|&check;
+2+^.^|Hard; uses Python `argparse`.&nbsp;^8^
+
+|SCons (Python)
+l|
+-o val
+--opt=val
+--opt val
+^.^|&check;
+^.^|&check;
+2+^.^|Hard; uses Python `argparse`.&nbsp;^8^
+
+|B2 (Boost Build)
+l|
+-oval
+-o val
+--opt=val
+--opt val
+^.^|&check;
+^.^|Medium; custom C code, conflicts with `-oval`.
+^.^|Easy; uses Jam+regex matching.
+^.^|Medium; custom C code, conflicts with `-oval`.
+
+6+^h|Package Manager
+
+|Conan (Python)
+l|
+-opt=val
+--opt=val
+--opt val
+^.^|&check;
+^.^|&check;
+2+^.^|Hard; uses Python `argparse`.&nbsp;^8^
+
+|vcpkg (Many)
+l|
+--opt=val
+^.^|&check;
+3+^.^|Medium; custom C++ code.
+
+|NuGet (Many)
+l|
+-opt val
+4+^.^|_unknown_^1^
+
+|Hunter (CMake)
+l|
+-Dopt=val
+4+^.^|Impossible; it's written in CMake.
+
+|Spack (Unix, macOS)
+l|
+-opt val
+--opt val
+2+^.^|Easy; may already be supported from use of Python `argparse`.
+2+^.^|Hard; uses Python `argparse`.&nbsp;^8^
+
+|Build2 (Many)
+l|
+-opt val
+--opt val
+4+^.^|Hard; Seems to use a custom language and compiler for argument definition
+and parsing.
+
+|===
+
+1. Unable to estimate as it's closed source.
+2. llvm-project has a few utilities that uses LLVMOption to parse command line
+options. See `fdOpts.td`.
+3. Would prefer not to depart from existing POSIX conventions.
+4. https://github.com/Kitware/CMake/blob/master/Source/cmCommandLineArgument.h#L102
+5. Uses `gnuopt_long` in `gnulib/lib/getopt.c`. Which has a global effect on
+the ecosystem of tools that use `getop_long` across many systems.
+6. https://github.com/qt/qtbase/blob/55aee8697512af105dfefabc1e2ec41d4df1e45e/qmake/option.cpp#L173
+7. https://github.com/gradle/gradle/blob/master/subprojects/cli/src/main/java/org/gradle/cli/CommandLineParser.java
+8. Choosing to change the Python `argparse` as a solution for this results in a
+global effect on all Python programs that use `argparse` and would prevent
+backward compatibility.
+
+Of the above set of possible option syntaxes and within the set of applications
+the most widely accepted option syntax is the `--opt=val` variation. Hence, it
+currently appears, that the least cost avenue is to use the `--opt=val` syntax
+globally.
+
+Although the cost of using `--opt=val` varies across the range of applications
+in aggregate we can estimate the cost as "medium". As most applications already
+support this option syntax. And it's possible for some other applications to add
+limited support for this syntax.
+
+_(+C+) Consumer: Executing the application._
+
+The cost of executing the an application comes in different parts:
+
+1. There's the basic cost of the execution itself, which varies between
+environments. But is a well known cost and easy to account for.
+2. There's the cost of, at best, one more execution of the application to gather
+the introspection information.
+
+==== Specification File
+
+Having an additional specification file can support some additional use cases
+that using command line options can't. The idea for this alternative is to have
+the JSON information in a file that is easily findable by consumers. Some
+possible locations are: as a specially named sibling to the application, in some
+standard location in the system with a special file name, manually specified
+by the user (for example through an environment variable or other consumer
+specific configuration). There are a couple of differing costs involved in
+having introspection files:
+
+_(A) Application: Deployment of extra file with application "binary"._
+
+Most applications already deploy extra files that support the main application.
+Hence adding another file is of negligible cost. Where the file is located is
+a concern. As finding a single consistent location for such a file across many
+environments is very difficult, at best, or impossible at worse. For example,
+while it's natural to have a sibling to the executable information file on
+Windows, it's not usual on Unix when installing to the system directories
+(i.e. `/bin`).
+
+An aspect of having the extra file is both the extra on-disk storage and
+time to install the file. For many uses this is not a concern. But there are
+classes of cases where the install is done repeatedly as would be seen in CI
+testing systems that require fresh installs. This is a concern regardless of
+where the data lives though. As it's the same data if it's an extra file or
+embedded in the application.
+
+_(B) Consumer: Deployment of extra file with application "binary"._
+
+A common method of distributing computation, especially {CPP} compiles, is to
+transport the tools from one machine to many, for example Incredibuild. The
+cost of transporting this extra file is minimal though. As the data is small,
+as shown above, and such systems are already dealing with transporting and
+caching such information.
+
+_(+C+) Consumer: Additional code to find the application "binary"._
+
+If the extra file is available from some location relative to the application
+consumers will need to implement search methods to first find the application
+before attempting to find the extra file. This search can be challenging for a
+variety of reasons like: needing to interpret `PATH` searching (in the case of
+not having an absolute file path), accounting for following symbolic links (or
+equivalents), avoiding user permission restrictions, and so on. The difficulty
+of this will also differ based on the utilities available in the language the
+application is written in and what the system provides.
+
+_(D) Consumer: Additional code to find the introspection file._
+
+Assuming we have a path to the application, per above, and/or that we have known
+locations it is relatively straightforward to find a specially named extra file.
+But that the more choices one has to account for the more implementation there
+is that can run into problems. Additionally tools like Incredibuild would need
+to learn about the extra file and consumers might need to use special logic to
+account for both the usual location of the file and the transported file
+location.
+
+==== Alternatives
+
+Given all that we can try and evaluate some alternative user user interface
+possibilities. Note, that these are not exhaustive. But they are, currently,
+the most likely to work in the widest set of use cases.
+
+[cols="^1,1a,1a",options="header"]
+|===
+
+^|
+^| Pros
+^| Cons
+
+|*Single Option Style* +
+`--std-info=X`, `--std-info-file=X`
+|
+* Low implementation cost.
+* Uniform handling for consumers.
+|
+* Some applications will need to implement a new option style.
+* Running the application may not be possible by the consumer.
+
+|*Two Option Styles* +
+`--std-info=X`, `--std-info-file=X` and/or `-std-info:X`, `-std-info-file:X`
+|
+* Low implementation cost.
+* Limited set of option handling for consumers.
+* Avoids changing Microsoft tools option handling.
+|
+* Adds an extra check, and context, for consumers.
+* Running the application may not be possible by the consumer.
+
+|*Implementation Defined Option Style* +
+(i.e. current status quo)
+|
+* Low implementation cost.
+* No changes to option handling for producers.
+|
+* Adds extra checks, and contexts, for consumers.
+* Running the application may not be possible by the consumer.
+
+|*Specification File*
+|
+* Avoids cost of adding options for producers.
+* Allows use when the application can't be executed.
+|
+* Adds complexity of finding the file for consumers.
+* Adds cost of transporting file along with the application where needed.
+
+|*Specification File and "Two Option Styles"*
+|
+* Low implementation cost.
+* Limited set of option handling for consumers.
+* Avoids changing Microsoft tools option handling.
+* Allows use when the application can't be executed.
+|
+* Some applications will need to implement a new option style.
+
+|===
+
+As we can see, no alternative is a perfect choice. But hopefully we can see that
+the last one, _Specification File and "Two Option Styles"_ is the most
+advantageous. But what is it? Other than the obvious of mashing the
+_Specification File_ and _"Two Option Style"_ alternatives together. The
+characteristics and requirements would be:
+
+1. A producer would be required to implement one or both of the two option
+styles: `--opt=val` or `-opt:val`.
+2. A producer would be required to indicate an error for an option style it does
+not accept.
+3. A producer could implement the `std-info-file` request as they wish, including
+reading from a file, reading from internal fixed text, dynamically generating
+the information, or any other method it deems appropriate.
+4. A consumer that wants to execute the producer directly would be required
+to try both the `--opt=val` and `-opt:val` styles in an order of its choosing
+to find the style that works for the producer.
+5. A consumer can save the produced information, using the `std-info-file`
+option, or other method of its choosing to a file that it can read directly
+afterwards.
+6. A consumer that does not want to execute the producer directly can use a
+previously saved information file.
+7. A consumer that does not want to execute the producer directly is required to
+search a small, defined, set of either relative to the producer or absolute
+locations for a specified specially named file.
+
+The key differences from the previous specification of only the _Single Option
+Style_ alternative are:
+
+* The addition of the `-opt:val` style.
+* Item (4) on consumers to try both option styles.
+* Item (7) specifying some search location for the information file.
+
+That combination of features and requirements avoids most of the problems one
+can encounter without creating additional ones.
+
+[#prior-art]
+== Prior Art
+
+There are no current implementations of this proposal. But one is in progress
+for the B2 build system.
+
+[#considerations]
+== Considerations
+
+Does this design accommodate tools outside of the {CPP} ecosystem?::
+This was initially designed with the {CPP} ecosystem in mind. But as the same
+tools are used for other ecosystems, like Fortran, it is also applicable to
+those. There does need to be more research and consideration for other tools
+in languages like Rust, DLang, JavaScript, etc.
+
+[#license]
+== License
+
+This work is licensed under the Creative Commons Attribution 4.0 International
+License. To view a copy of this license, visit
+http://creativecommons.org/licenses/by/4.0/ or send a letter to Creative
+Commons, PO Box 1866, Mountain View, CA 94042, USA.
