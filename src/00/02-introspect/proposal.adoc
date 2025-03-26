@@ -1,7 +1,7 @@
 [#introspection]
 = Tool Introspection
 :rfcpr: 2
-:stdpr: 0
+:stdpr: 1
 :authors: René Ferdinand Rivera Morell
 :email: grafikrobot@gmail.com
 :copyright: Copyright {authors}
@@ -20,7 +20,7 @@
 
 
 * *RFC PR*: https://github.com/ecostd/rfcs/pull/{rfcpr}[ecostd/rfcs/{rfcpr}]
-// * *Standard PR*: https://github.com/ecostd/standard/pull/{stdpr}[ecostd/standard/{stdpr}]
+* *Standard PR*: https://github.com/ecostd/standard/pull/{stdpr}[ecostd/standard/{stdpr}]
 
 [#abstract]
 == Abstract
