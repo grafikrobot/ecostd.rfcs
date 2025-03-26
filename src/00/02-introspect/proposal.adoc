@@ -110,14 +110,20 @@ of the capabilities it supports:
 
 [source,json]
 ----
-include::example-01.json[]
+{
+  "$schema": "std_info-1.0.0.json",
+  "std_info": "1.0.0"
+}
 ----
 
 Or could produce this as a JSON output in the case of full version ranges:
 
 [source,json]
 ----
-include::example-02.json[]
+{
+  "$schema": "std_info-1.0.0.json",
+  "std_info": "[1,2.5]"
+}
 ----
 
 Which would minimally indicate that the tool only supports the introspection
@@ -164,7 +170,11 @@ With a target tool response:
 
 [source,json]
 ----
-include::example-03.json[]
+{
+  "$schema": "std_info-1.0.0.json",
+  "std_info": "[1,2)",
+  "gcc_extra": "[2.1]"
+}
 ----
 
 Which the consumer can use to _declare_ the specific capability versions:
@@ -307,7 +317,14 @@ the single JSON string for the version range. For example:
 
 [source,plain_text]
 ----
-include::example-07.json[]
+{
+  "$schema": "std_info-1.0.0.json",
+  "std_info": "[1.0.0,2.0.0)",
+  "gcc_extra": [
+    "1.0.0",
+    "[2,3)"
+  ]
+}
 ----
 
 === Version Matching
@@ -394,7 +411,9 @@ This is a minimal conforming document:
 
 [source,json]
 ----
-include::example-04.json[]
+{
+  "std_info": "1.0.0"
+}
 ----
 
 This is also a minimal conforming document. But specifies a range of versions
@@ -402,14 +421,20 @@ supported for the `std_info` capability:
 
 [source,json]
 ----
-include::example-05.json[]
+{
+  "std_info": "[1.0.0,2.0.0)"
+}
 ----
 
 This example adds a custom vendor capability and the schema reference:
 
 [source,json]
 ----
-include::example-06.json[]
+{
+  "$schema": "std_info-1.0.0.json",
+  "std_info": "[1.0.0,2.0.0)",
+  "gcc_extra": "1.5.0"
+}
 ----
 
 === Capability Versions
