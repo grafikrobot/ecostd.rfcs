@@ -163,7 +163,7 @@ _introspection_:
 
 [source,shell]
 ----
-tool "--std-info"
+$ tool --std-info
 ----
 
 With a target tool response:
@@ -181,7 +181,7 @@ Which the consumer can use to _declare_ the specific capability versions:
 
 [source,shell]
 ----
-tool "--std-decl=std_info=2.0.0" "--std-decl=gcc_extra=2.1.0" ...
+$ tool --std-decl=std_info=2.0.0 --std-decl=gcc_extra=2.1.0 ...
 ----
 
 === Levels
@@ -215,7 +215,7 @@ many options. A capability is specified as a series of "scoped" identifiers
 separated by underscore ("_"). The capability must match this regular expression:
 footnote:Regex[ECMAScript® 2022 language specification, 13th edition, June 2022 (https://www.ecma-international.org/publications-and-standards/standards/ecma-262/)]
 
-[source,plan_text]
+[source,plain_text]
 ----
 ^[a-z0-9]+(_[a-z0-9]+)+$
 ----
@@ -315,7 +315,7 @@ versions. In that case it's important to be precise in informing consumers of
 this fact. To allow for that situation one can specify a JSON array instead of
 the single JSON string for the version range. For example:
 
-[source,plain_text]
+[source,json]
 ----
 {
   "$schema": "std_info-1.0.0.json",
@@ -559,7 +559,7 @@ l|
 
 6+^h|Build System
 
-|Cmake (many)
+|CMake (many)
 l|
 -opt val
 -opt=val
