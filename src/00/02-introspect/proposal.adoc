@@ -192,15 +192,15 @@ in a modern general purpose programming language to fully implement all aspects
 of the introspection. It would not be practical to have a shell script parse
 and recognize the more challenging aspect of parsing version number ranges and
 matching them together. To support such use cases the introspection has to
-support levels "min" and "full".
+support levels "core" and "full".
 
 Obviously the "full" level equates to the tool understanding all the arguments
-and values. The "min" level only understands these:
+and values. The "core" level only understands these:
 
 * Only introspection `--std-info` option.
 * Single version number in the responses for `--std-info`.
 
-This has the effect that a tool which only support the "min" level can only
+This has the effect that a tool which only supports the "core" level can only
 support specific versions of the capabilities it implements. But it also means
 that consumers will need to adjust their behavior to the tool instead of being
 able to ask the tool to adjust to the consumer. Consequently the consumer will
@@ -483,8 +483,8 @@ not yet been implemented the analysis below is an informed best guess.
 First some assumptions:
 
 . We are only going to consider the logic for adding the minimal conforming
-  interface and introspection information result. I.e. _minimum level_
-  (<<intspct-min>>) functionality.
+  interface and introspection information result. I.e. _core level_
+  functionality.
 . We will make some best effort prospective optimizations to an expected
   implementation. I.e. try to think of minimal code and data that reuses
   existing functionality in an application.
@@ -502,9 +502,9 @@ will invoke a package manager for introspection.
 Adding command line options to an application is a well know practice that has
 a long history. As such it's relatively easy to estimate it's impact.
 
-_(A) Application: Sizeof of introspection string in the application "binary"._
+_(A) Application: Size of introspection string in the application "binary"._
 
-The absolute _minimum level_ conforming introspection string in this would be
+The absolute _core level_ conforming introspection string in this would be
 `{"std_info":"1"}`. But that's not particularly useful as we would expect
 some other items represented. Being generous we can make a guess of having 10
 items:
